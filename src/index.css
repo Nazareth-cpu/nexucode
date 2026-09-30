@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --color-background: #07110F;
+  --color-surface: #0D1A17;
+  --color-surface-secondary: #12221E;
+  --color-border: #263833;
+
+  --color-primary: #F59E0B;
+  --color-primary-bright: #FBBF24;
+  --color-secondary: #10B981;
+  --color-secondary-dark: #047857;
+
+  --color-text: #F8FAFC;
+  --color-text-muted: #9CA3AF;
+  --color-error: #EF4444;
+}
+
+:root {
+  --color-background: #07110F;
+  --color-surface: #0D1A17;
+  --color-surface-secondary: #12221E;
+  --color-primary: #F59E0B;
+  --color-primary-bright: #FBBF24;
+  --color-secondary: #10B981;
+  --color-secondary-dark: #047857;
+  --color-text: #F8FAFC;
+  --color-text-muted: #9CA3AF;
+  --color-border: #263833;
+  --color-error: #EF4444;
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    border-color: #263833;
+  }
+  body {
+    font-family: var(--font-sans);
+    background-color: #07110F;
+    color: #F8FAFC;
+    min-height: 100vh;
+  }
+  code, pre, kbd, samp {
+    font-family: var(--font-mono);
+  }
+}
