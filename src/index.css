@@ -1,0 +1,152 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Approved Purple & Amber Palette */
+  --color-brand-purple: #7C3AED;
+  --color-brand-purple-light: #A855F7;
+  --color-brand-purple-dark: #581C87;
+  --color-brand-amber: #F59E0B;
+  --color-brand-amber-light: #FBBF24;
+  --color-brand-amber-dark: #D97706;
+
+  /* Surfaces & Backgrounds */
+  --color-bg-deep: #08051A;
+  --color-bg-sidebar: #0A061E;
+  --color-bg-card-dark: #0E0B28;
+  --color-bg-surface: #130F35;
+  --color-border-dark: #241D4D;
+  --color-border-subtle: #332768;
+
+  --color-text-main: #F8FAFC;
+  --color-text-muted: #94A3B8;
+  --color-error: #EF4444;
+}
+
+:root {
+  --primary-purple: #7C3AED;
+  --secondary-purple: #A855F7;
+  --primary-amber: #F59E0B;
+  --bright-amber: #FBBF24;
+  --bg-deep: #08051A;
+  --bg-card: #0E0B28;
+  --border-color: #241D4D;
+}
+
+@layer base {
+  * {
+    border-color: #241D4D;
+  }
+  body {
+    font-family: var(--font-sans);
+    background-color: #08051A;
+    color: #F8FAFC;
+    min-height: 100vh;
+    overflow-x: hidden;
+    background-image: 
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124, 58, 237, 0.15), transparent),
+      radial-gradient(ellipse 60% 40% at 100% 100%, rgba(245, 158, 11, 0.08), transparent);
+    background-attachment: fixed;
+  }
+  code, pre, kbd, samp {
+    font-family: var(--font-mono);
+  }
+}
+
+/* Custom Utilities for Purple + Amber Glow & Glassmorphism */
+.glow-purple {
+  box-shadow: 0 0 25px -5px rgba(124, 58, 237, 0.4);
+}
+
+.glow-amber {
+  box-shadow: 0 0 25px -5px rgba(245, 158, 11, 0.35);
+}
+
+.glow-purple-sm {
+  box-shadow: 0 0 15px -3px rgba(124, 58, 237, 0.3);
+}
+
+.glow-amber-sm {
+  box-shadow: 0 0 15px -3px rgba(245, 158, 11, 0.25);
+}
+
+/* Glass card styling */
+.glass-panel {
+  background: rgba(14, 11, 40, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+}
+
+.glass-panel-light {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 4px 20px -2px rgba(124, 58, 237, 0.06);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #08051A;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #241D4D;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #7C3AED;
+}
+
+/* Luminous edge sweep animation */
+@keyframes luminousSweep {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes gentleFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1deg);
+  }
+}
+
+@keyframes subtlePulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.02);
+  }
+}
+
+.animate-luminous-edge {
+  background-size: 200% 200%;
+  animation: luminousSweep 6s ease infinite;
+}
+
+.animate-gentle-float {
+  animation: gentleFloat 5s ease-in-out infinite;
+}
+
+.animate-subtle-pulse {
+  animation: subtlePulse 2.5s ease-in-out infinite;
+}
