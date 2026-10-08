@@ -55,18 +55,26 @@ function CertificatePreview({ form }: { form: Partial<CertificateRequest> }) {
   const label = typeLabels[form.certificateType || "participation"] || "OF PARTICIPATION";
   const fmtDate = form.eventDate
     ? new Date(form.eventDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
-    : "___________";
+    : "";
   const shortDate = form.eventDate
     ? new Date(form.eventDate).toLocaleDateString("en-IN")
-    : "\u2014";
+    : "";
+
+  // Common font stacks
+  const serif = "'Georgia', 'Times New Roman', serif";
+  const sans  = "'Segoe UI', Arial, sans-serif";
 
   return (
     <div style={{
-      position: "relative", width: "100%", aspectRatio: "1414/1000",
-      userSelect: "none", borderRadius: 4, overflow: "hidden",
+      position: "relative",
+      width: "100%",
+      aspectRatio: "1414/1000",
+      userSelect: "none",
+      borderRadius: 4,
+      overflow: "hidden",
       boxShadow: "0 8px 32px #00000055",
     }}>
-      {/* Certificate template background */}
+      {/* ── Background template ── */}
       <img
         src="/certificate_template.png"
         alt=""
@@ -74,96 +82,178 @@ function CertificatePreview({ form }: { form: Partial<CertificateRequest> }) {
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "fill", display: "block" }}
       />
 
-      {/* Certificate type subtitle — overlay only when NOT participation */}
+      {/* ── Sub-type label (gold text row) — only when NOT participation ── */}
       {label !== "OF PARTICIPATION" && (
         <div style={{
-          position: "absolute", top: "37.5%", left: "50%",
+          position: "absolute",
+          top: "36%",
+          left: "50%",
           transform: "translateX(-50%)",
-          fontSize: "clamp(6px, 1.15vw, 13px)", fontWeight: 800,
-          color: "#c9a227", letterSpacing: "0.25em",
-          fontFamily: "'Georgia', serif", whiteSpace: "nowrap",
-          background: "rgba(250,246,240,0.97)", padding: "1px 8px",
+          fontSize: "clamp(7px, 1.1vw, 14px)",
+          fontWeight: 800,
+          color: "#c9a227",
+          letterSpacing: "0.28em",
+          fontFamily: serif,
+          whiteSpace: "nowrap",
+          background: "rgba(252,248,240,0.95)",
+          padding: "1px 10px",
+          borderRadius: 2,
         }}>{label}</div>
       )}
 
-      {/* Recipient name — on first underline ~47% */}
+      {/* ── Recipient name — ON the 1st ruled underline ── */}
       <div style={{
-        position: "absolute", top: "47%", left: "50%",
-        transform: "translateX(-50%)",
-        fontSize: "clamp(9px, 1.55vw, 19px)", fontWeight: 700,
-        color: "#16115c", fontFamily: "'Georgia', serif",
-        whiteSpace: "nowrap", maxWidth: "54%",
-        textAlign: "center", overflow: "hidden", textOverflow: "ellipsis",
+        position: "absolute",
+        top: "43%",
+        left: "15%",
+        right: "15%",
+        textAlign: "center",
+        fontSize: "clamp(10px, 1.6vw, 20px)",
+        fontWeight: 700,
+        color: "#16115c",
+        fontFamily: serif,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        lineHeight: 1,
       }}>
         {form.recipientName || ""}
       </div>
 
-      {/* Event name — on second underline ~57.5% */}
+      {/* ── Event name — ON the 2nd ruled underline ── */}
       <div style={{
-        position: "absolute", top: "57.5%", left: "50%",
-        transform: "translateX(-50%)",
-        fontSize: "clamp(8px, 1.2vw, 15px)", fontWeight: 700,
-        color: "#16115c", fontFamily: "'Georgia', serif",
-        whiteSpace: "nowrap", maxWidth: "54%",
-        textAlign: "center", overflow: "hidden", textOverflow: "ellipsis",
+        position: "absolute",
+        top: "54%",
+        left: "12%",
+        right: "12%",
+        textAlign: "center",
+        fontSize: "clamp(9px, 1.25vw, 16px)",
+        fontWeight: 700,
+        color: "#16115c",
+        fontFamily: serif,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        lineHeight: 1,
       }}>
         {form.eventName || ""}
       </div>
 
-      {/* Date in "held on ___" */}
+      {/* ── Date — fills the "held on ___" blank ── */}
       <div style={{
-        position: "absolute", top: "70.5%", left: "33%",
-        fontSize: "clamp(5px, 0.85vw, 10px)", fontWeight: 600,
-        color: "#16115c", fontFamily: "sans-serif",
+        position: "absolute",
+        top: "63.5%",
+        left: "31%",
+        fontSize: "clamp(5px, 0.82vw, 10px)",
+        fontWeight: 600,
+        color: "#16115c",
+        fontFamily: sans,
+        whiteSpace: "nowrap",
+        lineHeight: 1,
       }}>
         {fmtDate}
       </div>
 
-      {/* Venue in "at ___" */}
+      {/* ── Venue — fills the "at ___" blank ── */}
       <div style={{
-        position: "absolute", top: "70.5%", left: "58%",
-        fontSize: "clamp(5px, 0.85vw, 10px)", fontWeight: 600,
-        color: "#16115c", fontFamily: "sans-serif",
+        position: "absolute",
+        top: "63.5%",
+        left: "52%",
+        right: "5%",
+        fontSize: "clamp(5px, 0.82vw, 10px)",
+        fontWeight: 600,
+        color: "#16115c",
+        fontFamily: sans,
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        lineHeight: 1,
       }}>
         {form.eventVenue || ""}
       </div>
 
-      {/* Footer: Date value */}
+      {/* ════ FOOTER SIGNATURE ROW ════
+           Template footer column centres (left → right):
+             ~11%  DATE
+             ~29%  FACULTY COORDINATOR
+             ~50%  STUDENT COORDINATOR
+             ~70%  AUTHORIZED SIGNATORY
+           Values sit just above the baked label text at ~87%
+      ═══════════════════════════════════════════ */}
+
+      {/* DATE value */}
       <div style={{
-        position: "absolute", top: "82%", left: "10.5%",
+        position: "absolute",
+        top: "87%",
+        left: "11%",
         transform: "translateX(-50%)",
-        fontSize: "clamp(4px, 0.6vw, 7px)", color: "#374151",
-        fontFamily: "sans-serif", textAlign: "center", whiteSpace: "nowrap",
+        fontSize: "clamp(4px, 0.58vw, 7px)",
+        fontWeight: 600,
+        color: "#1e1b4b",
+        fontFamily: sans,
+        textAlign: "center",
+        whiteSpace: "nowrap",
+        lineHeight: 1,
       }}>
         {shortDate}
       </div>
 
-      {/* Footer: Faculty Coordinator name */}
+      {/* FACULTY COORDINATOR value */}
       <div style={{
-        position: "absolute", top: "82%", left: "30%",
+        position: "absolute",
+        top: "87%",
+        left: "29%",
         transform: "translateX(-50%)",
-        fontSize: "clamp(4px, 0.6vw, 7px)", color: "#374151",
-        fontFamily: "sans-serif", textAlign: "center", whiteSpace: "nowrap",
+        maxWidth: "14%",
+        fontSize: "clamp(4px, 0.58vw, 7px)",
+        fontWeight: 600,
+        color: "#1e1b4b",
+        fontFamily: sans,
+        textAlign: "center",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        lineHeight: 1,
       }}>
         {form.facultyCoordinatorName || ""}
       </div>
 
-      {/* Footer: Student Coordinator name */}
+      {/* STUDENT COORDINATOR value */}
       <div style={{
-        position: "absolute", top: "82%", left: "51%",
+        position: "absolute",
+        top: "87%",
+        left: "50%",
         transform: "translateX(-50%)",
-        fontSize: "clamp(4px, 0.6vw, 7px)", color: "#374151",
-        fontFamily: "sans-serif", textAlign: "center", whiteSpace: "nowrap",
+        maxWidth: "14%",
+        fontSize: "clamp(4px, 0.58vw, 7px)",
+        fontWeight: 600,
+        color: "#1e1b4b",
+        fontFamily: sans,
+        textAlign: "center",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        lineHeight: 1,
       }}>
         {form.studentCoordinatorName || ""}
       </div>
 
-      {/* Footer: Authorized Signatory name */}
+      {/* AUTHORIZED SIGNATORY value */}
       <div style={{
-        position: "absolute", top: "82%", left: "71%",
+        position: "absolute",
+        top: "87%",
+        left: "70%",
         transform: "translateX(-50%)",
-        fontSize: "clamp(4px, 0.6vw, 7px)", color: "#374151",
-        fontFamily: "sans-serif", textAlign: "center", whiteSpace: "nowrap",
+        maxWidth: "14%",
+        fontSize: "clamp(4px, 0.58vw, 7px)",
+        fontWeight: 600,
+        color: "#1e1b4b",
+        fontFamily: sans,
+        textAlign: "center",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        lineHeight: 1,
       }}>
         {form.authorizedSignatoryName || ""}
       </div>
