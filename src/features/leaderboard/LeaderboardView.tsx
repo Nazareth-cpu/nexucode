@@ -1,303 +1,418 @@
 /**
- * Leaderboard View — Exact Implementation of Reference Panel 06
+ * Leaderboard View — Authentic Live Tournament Standings
  *
- * Implements:
- * - Header: Live Leaderboard + Live Status & Participant Count
- * - Left: Live Ranking Table (#, Participant avatar/name, Score, Solved, Last Submission)
- * - Right: "Your Progress" Circular 40% Ring & "Rank Over Time" Trend Chart
+ * Requirements:
+ * - Only displays rankings for contests/events that are currently live.
+ * - Shows authentic real-time participation data (zero synthetic mock data).
+ * - Displays a clean, informative state when no contests/events are currently active.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  BarChart3,
   Trophy,
-  Search,
-  RefreshCw,
   Users,
-  Award,
+  RefreshCw,
   Clock,
-  TrendingUp,
-  Activity,
+  ArrowRight,
+  Radio,
+  Flame,
+  CheckCircle2,
+  Calendar,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/src/features/auth';
 import { useRealtimeLeaderboard } from './hooks/useRealtimeLeaderboard';
-import type { ChapterLeaderboardRow } from '@/src/services/ranking/rankingService';
+import { contestService } from '@/src/features/contests/services/contestService';
+import { eventService, type EventItem } from '@/src/features/events/services/eventService';
+import type { ContestItem, ContestDetail, ContestLeaderboardRow } from '@/src/features/contests/types';
+import { ContestLeaderboardTable } from '@/src/features/contests/components/ContestLeaderboardTable';
 
 export function LeaderboardView() {
-  const { user, profile } = useAuth();
-  const { standings, isLoading, isRealtimeConnected, refresh } =
-    useRealtimeLeaderboard<ChapterLeaderboardRow>();
+  const navigate = useNavigate();
+  const { user, profile, session } = useAuth();
 
-  const [search, setSearch] = useState('');
+  const [liveContests, setLiveContests] = useState<ContestItem[]>([]);
+  const [liveEvents, setLiveEvents] = useState<EventItem[]>([]);
+  const [isDiscovering, setIsDiscovering] = useState(true);
+  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
+  const [selectedTournamentDetail, setSelectedTournamentDetail] = useState<ContestDetail | null>(null);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
-  const currentUserName =
-    profile?.display_name || user?.user_metadata?.display_name || 'Vedavyas Mahendrada';
+  // 1. Fetch live contests and live events
+  const discoverLiveTournaments = useCallback(async () => {
+    setIsDiscovering(true);
+    try {
+      const [contestRes, eventList] = await Promise.all([
+        contestService.getContests('all', session?.access_token),
+        eventService.getEvents(session?.access_token),
+      ]);
 
-  // Seed reference table data matching Panel 06
-  const referenceLeaderboard = [
-    { rank: 1, name: 'Aryan Sharma', score: 560, solved: 4, lastSub: '2 min ago', avatar: 'A', isCurrentUser: false },
-    { rank: 2, name: 'Meera Iyer', score: 520, solved: 4, lastSub: '5 min ago', avatar: 'M', isCurrentUser: false },
-    { rank: 3, name: 'Rohan Verma', score: 480, solved: 3, lastSub: '7 min ago', avatar: 'R', isCurrentUser: false },
-    { rank: 12, name: currentUserName, score: 320, solved: 2, lastSub: '12 min ago', avatar: 'V', isCurrentUser: true },
-    { rank: 13, name: 'Karthik Reddy', score: 300, solved: 2, lastSub: '14 min ago', avatar: 'K', isCurrentUser: false },
-    { rank: 14, name: 'Ananya Deshmukh', score: 280, solved: 2, lastSub: '18 min ago', avatar: 'A', isCurrentUser: false },
-    { rank: 15, name: 'Siddharth Patel', score: 260, solved: 2, lastSub: '22 min ago', avatar: 'S', isCurrentUser: false },
-  ];
+      const activeContests = (contestRes.data || []).filter((c) => c.status === 'live');
+      const activeEvents = (eventList || []).filter((e) => e.status === 'live' && e.isTechnical);
 
-  const displayData = standings && standings.length > 0
-    ? standings.map((s) => ({
-        rank: s.rank,
-        name: s.name,
-        score: s.score,
-        solved: s.solved,
-        lastSub: 'Just now',
-        avatar: s.name.charAt(0).toUpperCase(),
-        isCurrentUser: s.name.toLowerCase().includes(currentUserName.toLowerCase()),
-      }))
-    : referenceLeaderboard;
+      setLiveContests(activeContests);
+      setLiveEvents(activeEvents);
 
-  const filteredData = displayData.filter((row) =>
-    row.name.toLowerCase().includes(search.toLowerCase())
-  );
+      // Default selection if current selected tournament is not in the active list
+      const allActiveIds = [...activeContests.map((c) => c.id), ...activeEvents.map((e) => e.id)];
+      if (allActiveIds.length > 0) {
+        if (!selectedTournamentId || !allActiveIds.includes(selectedTournamentId)) {
+          setSelectedTournamentId(allActiveIds[0]);
+        }
+      } else {
+        setSelectedTournamentId(null);
+        setSelectedTournamentDetail(null);
+      }
+    } catch {
+      setLiveContests([]);
+      setLiveEvents([]);
+      setSelectedTournamentId(null);
+    } finally {
+      setIsDiscovering(false);
+    }
+  }, [session?.access_token, selectedTournamentId]);
+
+  useEffect(() => {
+    discoverLiveTournaments();
+  }, [discoverLiveTournaments]);
+
+  // 2. Fetch full detail (problems, rules) for the active selected contest
+  useEffect(() => {
+    if (!selectedTournamentId) {
+      setSelectedTournamentDetail(null);
+      return;
+    }
+
+    let isCancelled = false;
+    const fetchDetail = async () => {
+      setIsLoadingDetail(true);
+      const res = await contestService.getContest(selectedTournamentId, session?.access_token);
+      if (!isCancelled && res.data) {
+        setSelectedTournamentDetail(res.data);
+      }
+      if (!isCancelled) {
+        setIsLoadingDetail(false);
+      }
+    };
+
+    fetchDetail();
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedTournamentId, session?.access_token]);
+
+  // 3. Connect to authoritative real-time leaderboard for the active live contest
+  const {
+    standings,
+    isLoading: isLeaderboardLoading,
+    isRealtimeConnected,
+    refresh: refreshStandings,
+  } = useRealtimeLeaderboard<ContestLeaderboardRow>({
+    contestId: selectedTournamentId || undefined,
+    enabled: Boolean(selectedTournamentId),
+  });
+
+  const selectedContest = useMemo(() => {
+    return liveContests.find((c) => c.id === selectedTournamentId) || null;
+  }, [liveContests, selectedTournamentId]);
+
+  // Calculate user's live performance in this tournament
+  const currentUserId = user?.id;
+  const userStanding = useMemo(() => {
+    if (!currentUserId || !standings) return null;
+    return standings.find((s) => s.userId === currentUserId) || null;
+  }, [currentUserId, standings]);
+
+  const totalProblemsCount = selectedTournamentDetail?.problems?.length || selectedContest?.problemCount || 0;
+  const userSolvedCount = userStanding?.solvedCount || 0;
+  const solvePercentage = totalProblemsCount > 0 ? Math.round((userSolvedCount / totalProblemsCount) * 100) : 0;
+
+  const handleManualRefresh = () => {
+    discoverLiveTournaments();
+    if (selectedTournamentId) {
+      refreshStandings();
+    }
+  };
+
+  const hasLiveTournaments = liveContests.length > 0 || liveEvents.length > 0;
 
   return (
     <div className="space-y-6">
-      {/* ----------------- TOP HEADER (Panel 06) ----------------- */}
+      {/* ----------------- TOP HEADER ----------------- */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#F8FAFC]">
-            Live Leaderboard
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#F8FAFC] flex items-center gap-3">
+            <Trophy className="w-7 h-7 text-[#F59E0B]" />
+            Live Tournament Standings
           </h1>
           <p className="text-xs sm:text-sm text-[#94A3B8] mt-1">
-            Real-time rankings and point progression during chapter contests.
+            Real-time rankings and point progression during active chapter contests.
           </p>
         </div>
 
-        {/* Live Badges */}
+        {/* Action Controls & Live Status */}
         <div className="flex items-center gap-2.5">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#10B981]/15 border border-[#10B981]/40 text-[#10B981] text-xs font-bold font-mono">
-            <span className="w-2 h-2 rounded-full bg-[#10B981] animate-ping" />
-            <span>Live</span>
-          </div>
+          {hasLiveTournaments ? (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#10B981]/15 border border-[#10B981]/40 text-[#10B981] text-xs font-bold font-mono">
+              <span className="w-2 h-2 rounded-full bg-[#10B981] animate-ping" />
+              <span>Live Now</span>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#64748B]/15 border border-[#64748B]/40 text-[#94A3B8] text-xs font-medium font-mono">
+              <Clock className="w-3.5 h-3.5" />
+              <span>No Live Arena</span>
+            </div>
+          )}
 
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#7C3AED]/15 border border-[#7C3AED]/40 text-[#A855F7] text-xs font-bold font-mono">
-            <Users className="w-3.5 h-3.5" />
-            <span>312 Participants</span>
-          </div>
+          {hasLiveTournaments && selectedContest && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#7C3AED]/15 border border-[#7C3AED]/40 text-[#A855F7] text-xs font-bold font-mono">
+              <Users className="w-3.5 h-3.5" />
+              <span>{selectedContest.participantCount || standings.length} Participants</span>
+            </div>
+          )}
 
           <button
             type="button"
-            onClick={() => refresh()}
-            disabled={isLoading}
+            onClick={handleManualRefresh}
+            disabled={isDiscovering || isLeaderboardLoading}
             className="p-2 rounded-xl border border-[#241D4D] bg-[#0E0B28] hover:bg-[#15103A] text-[#94A3B8] hover:text-[#F8FAFC] transition-colors"
             title="Refresh Leaderboard"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-[#F59E0B]' : ''}`} />
+            <RefreshCw
+              className={`w-4 h-4 ${
+                isDiscovering || isLeaderboardLoading ? 'animate-spin text-[#F59E0B]' : ''
+              }`}
+            />
           </button>
         </div>
       </div>
 
-      {/* ----------------- SPLIT LAYOUT (Panel 06) ----------------- */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Live Ranking Table (2 Cols) */}
-        <div className="lg:col-span-2 rounded-2xl bg-[#0E0B28] border border-[#241D4D] overflow-hidden shadow-xl flex flex-col justify-between">
-          <div className="p-4 border-b border-[#241D4D] flex items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-xs">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search contender..."
-                className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-[#08051A] border border-[#241D4D] text-xs text-[#F8FAFC] placeholder-[#64748B] focus:outline-none focus:border-[#7C3AED]"
+      {/* ----------------- STATE 1: LOADING DISCOVERY ----------------- */}
+      {isDiscovering && !hasLiveTournaments ? (
+        <div className="rounded-2xl bg-[#0E0B28] border border-[#241D4D] p-12 text-center space-y-4 shadow-xl">
+          <RefreshCw className="w-8 h-8 text-[#7C3AED] animate-spin mx-auto" />
+          <p className="text-sm font-medium text-[#94A3B8]">
+            Scanning for active live tournaments and real-time arenas...
+          </p>
+        </div>
+      ) : !hasLiveTournaments ? (
+        /* ----------------- STATE 2: AUTHENTIC EMPTY STATE (NO LIVE CONTESTS) ----------------- */
+        <div className="rounded-3xl border border-dashed border-[#241D4D] bg-[#0E0B28]/80 p-10 sm:p-14 text-center space-y-6 shadow-2xl backdrop-blur-sm">
+          <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-[#7C3AED]/10 animate-ping opacity-75" />
+            <div className="relative w-16 h-16 rounded-full bg-[#15103A] border border-[#7C3AED]/30 flex items-center justify-center text-[#A855F7]">
+              <Radio className="w-8 h-8" />
+            </div>
+          </div>
+
+          <div className="max-w-md mx-auto space-y-2">
+            <h2 className="text-xl font-bold text-[#F8FAFC]">
+              No Live Contests Currently Active
+            </h2>
+            <p className="text-xs sm:text-sm text-[#94A3B8] leading-relaxed">
+              Leaderboards and ranking tables only activate when a contest or event is live and participants are actively competing and submitting solutions.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => navigate('/contests')}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold transition-all shadow-lg shadow-[#7C3AED]/25 active:scale-95"
+            >
+              <Calendar className="w-4 h-4" />
+              <span>Browse Upcoming Contests</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/events')}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-[#241D4D] bg-[#15103A] hover:bg-[#1E174E] text-[#F8FAFC] text-xs font-bold transition-all"
+            >
+              <span>View Technical Events</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* ----------------- STATE 3: LIVE TOURNAMENT ACTIVE ----------------- */
+        <div className="space-y-6">
+          {/* Tournament Switcher Tabs (if multiple tournaments are active simultaneously) */}
+          {(liveContests.length > 1 || liveEvents.length > 0) && (
+            <div className="flex flex-wrap items-center gap-2 bg-[#0E0B28] p-1.5 rounded-2xl border border-[#241D4D]">
+              {liveContests.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setSelectedTournamentId(c.id)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                    selectedTournamentId === c.id
+                      ? 'bg-[#7C3AED] text-white shadow-md shadow-[#7C3AED]/30'
+                      : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
+                  <span>{c.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Split Layout: Live Table & Real Progress */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column (2 Cols): Real-time Contest Standings Table */}
+            <div className="lg:col-span-2">
+              <ContestLeaderboardTable
+                standings={standings}
+                problems={selectedTournamentDetail?.problems || []}
+                onRefresh={refreshStandings}
+                isLoading={isLeaderboardLoading || isLoadingDetail}
+                isRealtimeConnected={isRealtimeConnected}
               />
             </div>
-          </div>
 
-          <div className="overflow-x-auto flex-1">
-            <table className="w-full text-left text-xs sm:text-sm">
-              <thead className="border-b border-[#241D4D] bg-[#0A061E]/90 text-[#94A3B8] text-xs uppercase font-bold font-mono">
-                <tr>
-                  <th className="py-3 px-4 w-12 text-center text-[#64748B]">#</th>
-                  <th className="py-3 px-4 text-[#94A3B8]">Participant</th>
-                  <th className="py-3 px-4 text-center text-[#94A3B8]">Score</th>
-                  <th className="py-3 px-4 text-center text-[#94A3B8]">Solved</th>
-                  <th className="py-3 px-4 text-right text-[#94A3B8]">Last Submission</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#241D4D]/60 text-[#F8FAFC]">
-                {filteredData.map((row) => (
-                  <tr
-                    key={row.rank + row.name}
-                    className={`transition-colors ${
-                      row.isCurrentUser
-                        ? 'bg-[#F59E0B]/15 hover:bg-[#F59E0B]/25 font-bold text-[#FBBF24] border-l-2 border-[#F59E0B]'
-                        : 'hover:bg-[#15103A]/60'
-                    }`}
-                  >
-                    {/* Rank Badge */}
-                    <td className="py-3.5 px-4 text-center font-mono font-bold">
-                      {row.rank === 1 ? (
-                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#F59E0B] text-[#08051A] text-xs font-extrabold shadow-sm">
-                          1
-                        </span>
-                      ) : row.rank === 2 ? (
-                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#94A3B8] text-[#08051A] text-xs font-bold">
-                          2
-                        </span>
-                      ) : row.rank === 3 ? (
-                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#B45309] text-white text-xs font-bold">
-                          3
-                        </span>
-                      ) : (
-                        <span className="text-[#64748B]">{row.rank}</span>
-                      )}
-                    </td>
+            {/* Right Column (1 Col): Real User Progress & Arena Info */}
+            <div className="space-y-6">
+              {/* Active Tournament Card */}
+              {selectedContest && (
+                <div className="rounded-2xl bg-[#0E0B28] border border-[#241D4D] p-5 shadow-xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono uppercase tracking-wider text-[#A855F7] font-bold flex items-center gap-1.5">
+                      <Flame className="w-3.5 h-3.5 text-[#F59E0B]" />
+                      Live Arena
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/contests/${selectedContest.id}/arena`)}
+                      className="text-xs font-bold text-[#F59E0B] hover:text-[#FBBF24] inline-flex items-center gap-1"
+                    >
+                      <span>Enter Arena</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
 
-                    {/* Participant Avatar & Name */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold font-mono ${
-                            row.isCurrentUser
-                              ? 'bg-[#F59E0B] text-[#08051A]'
-                              : 'bg-[#7C3AED]/20 text-[#C084FC] border border-[#7C3AED]/40'
-                          }`}
-                        >
-                          {row.avatar}
-                        </div>
-                        <span className="font-bold text-[#F8FAFC]">{row.name}</span>
-                        {row.isCurrentUser && (
-                          <span className="text-[10px] font-mono uppercase bg-[#F59E0B] text-[#08051A] px-1.5 py-0.2 rounded font-extrabold">
-                            You
-                          </span>
-                        )}
-                      </div>
-                    </td>
+                  <div>
+                    <h3 className="text-base font-extrabold text-[#F8FAFC]">
+                      {selectedContest.title}
+                    </h3>
+                    <p className="text-xs text-[#94A3B8] mt-1 line-clamp-2">
+                      {selectedContest.description}
+                    </p>
+                  </div>
 
-                    {/* Score */}
-                    <td className="py-3.5 px-4 text-center font-mono font-bold text-[#F59E0B]">
-                      {row.score}
-                    </td>
+                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[#241D4D]">
+                    <div className="p-2.5 rounded-xl bg-[#08051A] border border-[#241D4D]">
+                      <span className="text-[10px] font-mono uppercase text-[#64748B] block">
+                        Problems
+                      </span>
+                      <span className="text-sm font-extrabold font-mono text-[#F8FAFC]">
+                        {totalProblemsCount}
+                      </span>
+                    </div>
 
-                    {/* Solved */}
-                    <td className="py-3.5 px-4 text-center font-mono font-bold text-[#F8FAFC]">
-                      {row.solved}
-                    </td>
-
-                    {/* Last Submission */}
-                    <td className="py-3.5 px-4 text-right font-mono text-xs text-[#94A3B8]">
-                      {row.lastSub}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Right Column: Progress & Rank-Over-Time Cards (Panel 06) */}
-        <div className="space-y-6">
-          {/* Your Progress Card */}
-          <div className="rounded-2xl bg-[#0E0B28] border border-[#241D4D] p-6 shadow-xl space-y-4">
-            <h3 className="text-sm font-bold text-[#F8FAFC]">Your Progress</h3>
-
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className="text-3xl font-extrabold text-[#F8FAFC] font-mono">
-                  2 <span className="text-[#64748B] text-lg font-normal">/ 5</span>
+                    <div className="p-2.5 rounded-xl bg-[#08051A] border border-[#241D4D]">
+                      <span className="text-[10px] font-mono uppercase text-[#64748B] block">
+                        Contenders
+                      </span>
+                      <span className="text-sm font-extrabold font-mono text-[#10B981]">
+                        {selectedContest.participantCount || standings.length}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-xs font-semibold text-[#94A3B8] mt-1">Problems Solved</p>
-              </div>
+              )}
 
-              {/* 40% Circular Progress Indicator SVG */}
-              <div className="relative w-20 h-20 flex items-center justify-center">
-                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                  {/* Background Track */}
-                  <path
-                    className="text-[#241D4D]"
-                    strokeWidth="3.5"
-                    stroke="currentColor"
-                    fill="none"
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  />
-                  {/* Progress Arc (40%) */}
-                  <path
-                    className="text-[#7C3AED]"
-                    strokeDasharray="40, 100"
-                    strokeLinecap="round"
-                    strokeWidth="3.5"
-                    stroke="currentColor"
-                    fill="none"
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  />
-                </svg>
-                <span className="absolute font-mono font-extrabold text-sm text-[#FBBF24]">
-                  40%
-                </span>
-              </div>
-            </div>
-          </div>
+              {/* Your Live Progress Card (Computed strictly from live submissions) */}
+              <div className="rounded-2xl bg-[#0E0B28] border border-[#241D4D] p-5 shadow-xl space-y-4">
+                <h3 className="text-sm font-bold text-[#F8FAFC] flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#10B981]" />
+                  Your Live Progress
+                </h3>
 
-          {/* Rank Over Time Trend Card (Panel 06) */}
-          <div className="rounded-2xl bg-[#0E0B28] border border-[#241D4D] p-6 shadow-xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-[#F8FAFC]">Rank Over Time</h3>
-              <span className="text-xs font-bold text-[#34D399] flex items-center gap-1 font-mono">
-                <TrendingUp className="w-3.5 h-3.5" /> Climbing #12
-              </span>
-            </div>
+                {userStanding ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-3xl font-extrabold text-[#F8FAFC] font-mono">
+                          {userSolvedCount}{' '}
+                          <span className="text-[#64748B] text-lg font-normal">
+                            / {totalProblemsCount}
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-[#94A3B8] mt-1">
+                          Problems Solved
+                        </p>
+                      </div>
 
-            {/* Rank Trend SVG Line Chart */}
-            <div className="pt-2">
-              <svg viewBox="0 0 260 100" className="w-full h-24 overflow-visible">
-                <defs>
-                  <linearGradient id="rankLineGrad" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#7C3AED" />
-                    <stop offset="50%" stopColor="#A855F7" />
-                    <stop offset="100%" stopColor="#F59E0B" />
-                  </linearGradient>
-                </defs>
+                      {/* Accurate Progress Ring */}
+                      <div className="relative w-18 h-18 flex items-center justify-center">
+                        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                          <path
+                            className="text-[#241D4D]"
+                            strokeWidth="3.5"
+                            stroke="currentColor"
+                            fill="none"
+                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                          />
+                          <path
+                            className="text-[#7C3AED]"
+                            strokeDasharray={`${solvePercentage}, 100`}
+                            strokeLinecap="round"
+                            strokeWidth="3.5"
+                            stroke="currentColor"
+                            fill="none"
+                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                          />
+                        </svg>
+                        <span className="absolute font-mono font-extrabold text-xs text-[#FBBF24]">
+                          {solvePercentage}%
+                        </span>
+                      </div>
+                    </div>
 
-                {/* Horizontal Grid lines */}
-                <line x1="20" y1="20" x2="250" y2="20" stroke="#241D4D" strokeWidth="1" strokeDasharray="3,3" />
-                <line x1="20" y1="50" x2="250" y2="50" stroke="#241D4D" strokeWidth="1" strokeDasharray="3,3" />
-                <line x1="20" y1="80" x2="250" y2="80" stroke="#241D4D" strokeWidth="1" strokeDasharray="3,3" />
-
-                {/* Y-axis labels */}
-                <text x="5" y="24" className="text-[8px] font-mono fill-[#64748B]">1</text>
-                <text x="5" y="54" className="text-[8px] font-mono fill-[#64748B]">20</text>
-                <text x="5" y="84" className="text-[8px] font-mono fill-[#64748B]">50</text>
-
-                {/* Trend line curve from rank 45 to rank 12 */}
-                <path
-                  d="M 30 75 Q 80 65, 120 40 T 190 35 T 240 28"
-                  fill="none"
-                  stroke="url(#rankLineGrad)"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-
-                {/* Data Points */}
-                <circle cx="30" cy="75" r="3.5" fill="#7C3AED" />
-                <circle cx="85" cy="58" r="3.5" fill="#7C3AED" />
-                <circle cx="140" cy="40" r="3.5" fill="#A855F7" />
-                <circle cx="190" cy="35" r="3.5" fill="#F59E0B" />
-                <circle cx="240" cy="28" r="4.5" fill="#FBBF24" stroke="#7C3AED" strokeWidth="2" />
-              </svg>
-
-              {/* X-axis labels */}
-              <div className="flex justify-between text-[9px] font-mono text-[#64748B] pt-2 px-2">
-                <span>0</span>
-                <span>30m</span>
-                <span>1h</span>
-                <span>2h</span>
-                <span>3h</span>
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#241D4D] text-xs">
+                      <div className="p-2 rounded-lg bg-[#08051A] border border-[#241D4D]">
+                        <span className="text-[10px] text-[#64748B] block font-mono uppercase">
+                          Current Rank
+                        </span>
+                        <span className="font-mono font-bold text-[#F59E0B]">
+                          #{userStanding.rank}
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-lg bg-[#08051A] border border-[#241D4D]">
+                        <span className="text-[10px] text-[#64748B] block font-mono uppercase">
+                          Total Score
+                        </span>
+                        <span className="font-mono font-bold text-[#F8FAFC]">
+                          {userStanding.totalScore} pts
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 space-y-3">
+                    <p className="text-xs text-[#94A3B8]">
+                      You haven't submitted any solutions for this live tournament yet.
+                    </p>
+                    {selectedContest && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/contests/${selectedContest.id}/arena`)}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold transition-all shadow-md shadow-[#7C3AED]/20"
+                      >
+                        <span>Join Live Arena</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
+
