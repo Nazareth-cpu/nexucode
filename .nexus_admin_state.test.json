@@ -1,0 +1,13 @@
+{
+  "bootstrapped": true,
+  "auditRecord": {
+    "id": "audit-1791310013530",
+    "adminUserId": "admin-persistence-check",
+    "adminEmail": "reload@nexuscode.edu",
+    "bootstrappedAt": "2026-10-06T18:06:53.530Z"
+  },
+  "assignedRoles": {
+    "admin-persistence-check": "admin"
+  },
+  "updatedAt": "2026-10-06T18:06:53.530Z"
+}

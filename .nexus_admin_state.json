@@ -1,0 +1,13 @@
+{
+  "bootstrapped": true,
+  "auditRecord": {
+    "id": "audit-recovered-1791307030400",
+    "adminUserId": "e49ea13a-5557-4546-90af-05495a22a6cf",
+    "adminEmail": "vedavyas.dev.cse@gmail.com",
+    "bootstrappedAt": "2026-10-06T17:17:10.400Z"
+  },
+  "assignedRoles": {
+    "e49ea13a-5557-4546-90af-05495a22a6cf": "admin"
+  },
+  "updatedAt": "2026-10-06T17:17:10.404Z"
+}

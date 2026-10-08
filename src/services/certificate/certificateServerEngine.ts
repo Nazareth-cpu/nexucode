@@ -1,0 +1,278 @@
+/**
+ * Nexus Code — Certificate Server Engine
+ *
+ * Lifecycle: DRAFT → PENDING_APPROVAL → APPROVED → ISSUED | REJECTED | REVOKED
+ *
+ * Roles:
+ *   Coordinator: create, edit draft, submit, view own
+ *   Admin:       view all, approve, reject, issue, revoke
+ *   Student:     view own issued certs (read-only)
+ */
+
+import crypto from "crypto";
+
+export type CertificateStatus =
+  | "draft"
+  | "pending_approval"
+  | "approved"
+  | "issued"
+  | "rejected"
+  | "revoked";
+
+export type CertificateType =
+  | "participation"
+  | "achievement"
+  | "merit"
+  | "excellence"
+  | "winner"
+  | "runner_up"
+  | "special";
+
+export interface CertificateRequest {
+  id: string;
+  recipientName: string;
+  recipientEmail: string;
+  recipientCollegeId: string;
+  recipientUserId?: string;
+  eventId?: string;
+  eventName: string;
+  eventDate: string;
+  eventVenue: string;
+  certificateType: CertificateType;
+  achievementText: string;
+  customMessage?: string;
+  facultyCoordinatorName: string;
+  studentCoordinatorName: string;
+  authorizedSignatoryName: string;
+  status: CertificateStatus;
+  requestedBy: string;
+  requestedByName: string;
+  createdAt: string;
+  updatedAt: string;
+  reviewedBy?: string;
+  reviewedByName?: string;
+  reviewedAt?: string;
+  rejectionReason?: string;
+  issuedAt?: string;
+  verificationCode?: string;
+  certificateNumber?: string;
+}
+
+const sampleSeedRequests: CertificateRequest[] = [
+  {
+    id: "cert-seed-1",
+    recipientName: "Mahendra Varma",
+    recipientEmail: "mahendra@gmrit.edu.in",
+    recipientCollegeId: "21MH1A0589",
+    eventName: "National Level Hackathon - CodeFest 2024",
+    eventDate: "2024-03-15",
+    eventVenue: "GMRIT Auditorium & CSE Labs",
+    certificateType: "winner",
+    achievementText: "has secured 1st Place with outstanding technical excellence in the",
+    customMessage: "Awarded with highest honors for demonstrating exceptional problem-solving and full-stack development skills.",
+    facultyCoordinatorName: "Dr. K. Srinivas",
+    studentCoordinatorName: "Rahul Sharma",
+    authorizedSignatoryName: "Dr. C.L.V.R.S.V. Prasad (Principal)",
+    status: "issued",
+    requestedBy: "coord-1",
+    requestedByName: "Coding Club Coordinator",
+    createdAt: "2024-03-15T10:00:00Z",
+    updatedAt: "2024-03-16T10:00:00Z",
+    reviewedBy: "admin-1",
+    reviewedByName: "Principal / Admin",
+    reviewedAt: "2024-03-16T10:00:00Z",
+    issuedAt: "2024-03-16T12:00:00Z",
+    verificationCode: "CC-WINNER-2024-001",
+    certificateNumber: "CC-2024-0001",
+  },
+  {
+    id: "cert-seed-2",
+    recipientName: "A. Srikanth",
+    recipientEmail: "srikanth@gmrit.edu.in",
+    recipientCollegeId: "22MH1A0502",
+    eventName: "NexusCode Speed Debugging Championship",
+    eventDate: "2024-04-10",
+    eventVenue: "GMRIT Campus",
+    certificateType: "participation",
+    achievementText: "has successfully participated and showcased competitive programming skills in",
+    facultyCoordinatorName: "Dr. V. Vasudha",
+    studentCoordinatorName: "Ananya Roy",
+    authorizedSignatoryName: "Head of Department (CSE)",
+    status: "issued",
+    requestedBy: "coord-1",
+    requestedByName: "Coding Club Coordinator",
+    createdAt: "2024-04-10T10:00:00Z",
+    updatedAt: "2024-04-11T10:00:00Z",
+    reviewedBy: "admin-1",
+    reviewedByName: "Admin",
+    reviewedAt: "2024-04-11T10:00:00Z",
+    issuedAt: "2024-04-11T12:00:00Z",
+    verificationCode: "CC-PART-2024-002",
+    certificateNumber: "CC-2024-0002",
+  },
+  {
+    id: "cert-seed-3",
+    recipientName: "P. Divya",
+    recipientEmail: "divya@gmrit.edu.in",
+    recipientCollegeId: "22MH1A0545",
+    eventName: "WebCraft 3.0 UI/UX Hackathon",
+    eventDate: "2024-05-02",
+    eventVenue: "GMRIT Digital Library Lab",
+    certificateType: "excellence",
+    achievementText: "for demonstrating extraordinary creativity and design mastery in",
+    facultyCoordinatorName: "Dr. K. Srinivas",
+    studentCoordinatorName: "Rahul Sharma",
+    authorizedSignatoryName: "Principal, GMRIT DU",
+    status: "approved",
+    requestedBy: "coord-1",
+    requestedByName: "Coding Club Coordinator",
+    createdAt: "2024-05-02T10:00:00Z",
+    updatedAt: "2024-05-03T10:00:00Z",
+    reviewedBy: "admin-1",
+    reviewedByName: "Principal / Admin",
+    reviewedAt: "2024-05-03T10:00:00Z",
+  }
+];
+
+let certificateStore: CertificateRequest[] = [...sampleSeedRequests];
+let _certSeq = 3;
+
+function genCertNumber(): string {
+  const year = new Date().getFullYear();
+  return `CC-${year}-${String(_certSeq++).padStart(4, "0")}`;
+}
+
+export const certificateServerEngine = {
+  getAllRequests(): CertificateRequest[] {
+    return [...certificateStore].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  },
+
+  getRequestsByCoordinator(userId: string): CertificateRequest[] {
+    return certificateStore
+      .filter((r) => r.requestedBy === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  },
+
+  getIssuedForUser(userId: string, email?: string): CertificateRequest[] {
+    return certificateStore.filter(
+      (r) =>
+        r.status === "issued" &&
+        (r.recipientUserId === userId || (email && r.recipientEmail === email))
+    );
+  },
+
+  getById(id: string): CertificateRequest | null {
+    return certificateStore.find((r) => r.id === id) ?? null;
+  },
+
+  verifyByCode(code: string): CertificateRequest | null {
+    if (!code) return null;
+    const cleanCode = code.trim().toLowerCase();
+    return certificateStore.find(
+      (r) =>
+        (r.status === "issued" || r.status === "approved") &&
+        (
+          r.verificationCode?.toLowerCase() === cleanCode ||
+          r.id.toLowerCase() === cleanCode ||
+          r.certificateNumber?.toLowerCase() === cleanCode
+        )
+    ) ?? null;
+  },
+
+  createRequest(
+    payload: Omit<CertificateRequest, "id" | "status" | "createdAt" | "updatedAt" | "verificationCode" | "certificateNumber" | "issuedAt">,
+    role: string
+  ): { success: boolean; request?: CertificateRequest; error?: string } {
+    if (!["coordinator", "admin"].includes(role)) {
+      return { success: false, error: "Only coordinators and admins can create certificate requests." };
+    }
+    if (!payload.recipientName?.trim()) return { success: false, error: "Recipient name is required." };
+    if (!payload.eventName?.trim()) return { success: false, error: "Event name is required." };
+    if (!payload.eventDate) return { success: false, error: "Event date is required." };
+    const now = new Date().toISOString();
+    const req: CertificateRequest = { ...payload, id: crypto.randomUUID(), status: "draft", createdAt: now, updatedAt: now };
+    certificateStore.push(req);
+    return { success: true, request: req };
+  },
+
+  updateRequest(id: string, updates: Partial<CertificateRequest>, requestorId: string, role: string): { success: boolean; request?: CertificateRequest; error?: string } {
+    const idx = certificateStore.findIndex((r) => r.id === id);
+    if (idx === -1) return { success: false, error: "Not found." };
+    const req = certificateStore[idx];
+    if (role !== "admin" && req.requestedBy !== requestorId) return { success: false, error: "Not authorized." };
+    if (req.status !== "draft") return { success: false, error: "Only drafts can be edited." };
+    const now = new Date().toISOString();
+    certificateStore[idx] = { ...req, ...updates, id: req.id, status: req.status, requestedBy: req.requestedBy, createdAt: req.createdAt, updatedAt: now };
+    return { success: true, request: certificateStore[idx] };
+  },
+
+  submitForApproval(id: string, requestorId: string): { success: boolean; request?: CertificateRequest; error?: string } {
+    const idx = certificateStore.findIndex((r) => r.id === id);
+    if (idx === -1) return { success: false, error: "Not found." };
+    const req = certificateStore[idx];
+    if (req.requestedBy !== requestorId) return { success: false, error: "Not authorized." };
+    if (req.status !== "draft") return { success: false, error: "Only drafts can be submitted." };
+    const now = new Date().toISOString();
+    certificateStore[idx] = { ...req, status: "pending_approval", updatedAt: now };
+    return { success: true, request: certificateStore[idx] };
+  },
+
+  approveRequest(id: string, adminId: string, adminName: string): { success: boolean; request?: CertificateRequest; error?: string } {
+    const idx = certificateStore.findIndex((r) => r.id === id);
+    if (idx === -1) return { success: false, error: "Not found." };
+    const req = certificateStore[idx];
+    if (req.status !== "pending_approval") return { success: false, error: "Only pending requests can be approved." };
+    const now = new Date().toISOString();
+    certificateStore[idx] = { ...req, status: "approved", reviewedBy: adminId, reviewedByName: adminName, reviewedAt: now, updatedAt: now };
+    return { success: true, request: certificateStore[idx] };
+  },
+
+  rejectRequest(id: string, adminId: string, adminName: string, reason: string): { success: boolean; request?: CertificateRequest; error?: string } {
+    const idx = certificateStore.findIndex((r) => r.id === id);
+    if (idx === -1) return { success: false, error: "Not found." };
+    const req = certificateStore[idx];
+    if (!["pending_approval", "approved"].includes(req.status)) return { success: false, error: "Cannot reject this request." };
+    if (!reason?.trim()) return { success: false, error: "Rejection reason is required." };
+    const now = new Date().toISOString();
+    certificateStore[idx] = { ...req, status: "rejected", reviewedBy: adminId, reviewedByName: adminName, reviewedAt: now, rejectionReason: reason, updatedAt: now };
+    return { success: true, request: certificateStore[idx] };
+  },
+
+  issueCertificate(id: string, adminId: string, adminName: string): { success: boolean; request?: CertificateRequest; error?: string } {
+    const idx = certificateStore.findIndex((r) => r.id === id);
+    if (idx === -1) return { success: false, error: "Not found." };
+    const req = certificateStore[idx];
+    if (req.status !== "approved") return { success: false, error: "Only approved certificates can be issued." };
+    const now = new Date().toISOString();
+    certificateStore[idx] = { ...req, status: "issued", issuedAt: now, verificationCode: crypto.randomUUID(), certificateNumber: genCertNumber(), reviewedBy: adminId, reviewedByName: adminName, updatedAt: now };
+    return { success: true, request: certificateStore[idx] };
+  },
+
+  revokeCertificate(id: string, adminId: string, reason: string): { success: boolean; request?: CertificateRequest; error?: string } {
+    const idx = certificateStore.findIndex((r) => r.id === id);
+    if (idx === -1) return { success: false, error: "Not found." };
+    const req = certificateStore[idx];
+    if (req.status !== "issued") return { success: false, error: "Only issued certs can be revoked." };
+    if (!reason?.trim()) return { success: false, error: "Revocation reason required." };
+    const now = new Date().toISOString();
+    certificateStore[idx] = { ...req, status: "revoked", rejectionReason: reason, reviewedBy: adminId, updatedAt: now };
+    return { success: true, request: certificateStore[idx] };
+  },
+
+  deleteRequest(id: string, requestorId: string, role: string): { success: boolean; error?: string } {
+    const idx = certificateStore.findIndex((r) => r.id === id);
+    if (idx === -1) return { success: false, error: "Not found." };
+    const req = certificateStore[idx];
+    if (role !== "admin" && req.requestedBy !== requestorId) return { success: false, error: "Not authorized." };
+    if (!["draft", "rejected"].includes(req.status)) return { success: false, error: "Only drafts or rejected requests can be deleted." };
+    certificateStore.splice(idx, 1);
+    return { success: true };
+  },
+
+  getStats() {
+    const byStatus = certificateStore.reduce((acc, r) => { acc[r.status] = (acc[r.status] || 0) + 1; return acc; }, {} as Record<string, number>);
+    return { total: certificateStore.length, byStatus };
+  },
+};

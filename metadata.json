@@ -1,0 +1,8 @@
+{
+  "name": "Remix Remix Student Chapter Coding Platform",
+  "description": "A chapter-owned coding platform focused on structured coding contests, technical events, and skill progression.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
