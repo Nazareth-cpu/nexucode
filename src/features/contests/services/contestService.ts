@@ -15,6 +15,7 @@ import type {
   ViolationReportResponse,
   ViolationType,
 } from '../types';
+import type { AIContestAnnouncementResult } from '@/src/services/ai/aiContestService';
 
 export const contestService = {
   /**
@@ -316,4 +317,56 @@ export const contestService = {
       return { success: false, error: (err as Error).message || 'Network error.' };
     }
   },
+
+  /**
+   * Retrieves authoritative finalized Top 3 winners with AI analysis.
+   */
+  async getWinners(
+    contestId: string,
+    token?: string
+  ): Promise<{ winners: AIContestAnnouncementResult | null; error: string | null }> {
+    try {
+      const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const res = await fetch(`/api/contests/${contestId}/winners`, { headers });
+      if (!res.ok) {
+        return { winners: null, error: `Failed to fetch winners (${res.status})` };
+      }
+
+      const data = await res.json();
+      return { winners: data.winners || null, error: null };
+    } catch (err: unknown) {
+      return { winners: null, error: (err as Error).message || 'Network error fetching winners.' };
+    }
+  },
+
+  /**
+   * Finalizes contest and triggers authoritative AI Top 3 evaluation (Staff action).
+   */
+  async finalizeContest(
+    contestId: string,
+    token: string
+  ): Promise<{ success: boolean; winners?: AIContestAnnouncementResult; error: string | null }> {
+    try {
+      const res = await fetch(`/api/contests/${contestId}/finalize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        return { success: false, error: err.error || err.message || 'Failed to finalize contest.' };
+      }
+
+      const data = await res.json();
+      return { success: true, winners: data.winners, error: null };
+    } catch (err: unknown) {
+      return { success: false, error: (err as Error).message || 'Network error finalizing contest.' };
+    }
+  },
 };
+

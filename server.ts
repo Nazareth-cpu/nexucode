@@ -28,6 +28,8 @@ import {
   updateParticipantStatus,
   recordContestSubmissionScore,
   getChapterStandings,
+  finalizeContestAndEvaluateTop3,
+  getContestWinners,
 } from './src/services/contest/contestServerEngine';
 import { realtimeBroadcaster } from './src/services/realtime/realtimeBroadcaster';
 import { integrityEngine } from './src/services/integrity/integrityEngine';
@@ -622,6 +624,41 @@ app.post('/api/submissions/submit', authenticateUser, async (req: Request, res: 
       });
     }
 
+    // Strict Contest Lifecycle Closure Check
+    if (contestId) {
+      const isStaff = user.role === 'admin' || user.role === 'coordinator';
+      const contestDetail = getContestDetail(contestId, user.id, isStaff);
+      if (!contestDetail) {
+        return res.status(404).json({ error: 'CONTEST_NOT_FOUND', message: 'Tournament not found.' });
+      }
+      if (contestDetail.status === 'ended' || contestDetail.status === 'archived') {
+        return res.status(403).json({
+          error: 'CONTEST_ENDED',
+          message: 'Tournament has concluded. Submissions are closed and the leaderboard is frozen.',
+        });
+      }
+      if (contestDetail.status === 'scheduled' && !isStaff) {
+        return res.status(403).json({
+          error: 'CONTEST_NOT_LIVE',
+          message: 'Tournament has not started yet. Submissions open when the live arena begins.',
+        });
+      }
+    }
+
+    // Strict Event Lifecycle Closure Check
+    if (eventId) {
+      const eventDetail = await eventServerEngine.getEventDetail(eventId, user);
+      if (!eventDetail) {
+        return res.status(404).json({ error: 'EVENT_NOT_FOUND', message: 'Event not found.' });
+      }
+      if (eventDetail.status === 'ended' || eventDetail.status === 'completed') {
+        return res.status(403).json({
+          error: 'EVENT_ENDED',
+          message: 'Event has concluded. Submissions are closed.',
+        });
+      }
+    }
+
     if (problem.status !== 'published' && user.role !== 'admin' && user.role !== 'coordinator') {
       return res.status(403).json({ error: 'PROBLEM_NOT_ACCESSIBLE', message: 'This problem is not published.' });
     }
@@ -1181,6 +1218,47 @@ app.get('/api/contests/:id/leaderboard', optionalAuthenticateUser, (req: Request
     return res.json({ leaderboard });
   } catch (err: unknown) {
     console.error('[API /api/contests/:id/leaderboard Error]:', err);
+    return res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /api/contests/:id/finalize
+ * Closes contest, freezes leaderboard, and triggers authoritative AI Top 3 evaluation.
+ */
+app.post('/api/contests/:id/finalize', authenticateUser, async (req: Request, res: Response) => {
+  try {
+    const contestId = req.params.id;
+    const user = (req as any).user;
+    const userToken = (req as any).userToken;
+    const supabase = getServerSupabase(userToken);
+
+    const result = await finalizeContestAndEvaluateTop3(contestId, user, supabase);
+    if (!result.success) {
+      return res.status(result.error?.includes('FORBIDDEN') ? 403 : 400).json(result);
+    }
+
+    return res.json(result);
+  } catch (err: unknown) {
+    console.error('[API POST /api/contests/:id/finalize Error]:', err);
+    return res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * GET /api/contests/:id/winners
+ * Retrieves authoritative finalized Top 3 winners with AI analysis, auto-finalizing if ended.
+ */
+app.get('/api/contests/:id/winners', optionalAuthenticateUser, async (req: Request, res: Response) => {
+  try {
+    const contestId = req.params.id;
+    const userToken = (req as any).userToken;
+    const supabase = getServerSupabase(userToken);
+
+    const result = await getContestWinners(contestId, supabase);
+    return res.json(result);
+  } catch (err: unknown) {
+    console.error('[API GET /api/contests/:id/winners Error]:', err);
     return res.status(500).json({ error: (err as Error).message });
   }
 });
@@ -1995,6 +2073,41 @@ app.get('/api/events/:id/results', optionalAuthenticateUser, async (req: Request
     return res.json(results);
   } catch (err: unknown) {
     console.error('[API GET /api/events/:id/results Error]:', err);
+    return res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * GET /api/events/:id/winners
+ * Returns finalized AI Top 3 winners for technical event
+ */
+app.get('/api/events/:id/winners', optionalAuthenticateUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await eventServerEngine.getEventWinners(id);
+    return res.json(result);
+  } catch (err: unknown) {
+    console.error('[API GET /api/events/:id/winners Error]:', err);
+    return res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /api/events/:id/finalize
+ * Finalizes technical event, computes rankings, and triggers AI Top 3
+ */
+app.post('/api/events/:id/finalize', authenticateUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+    const result = await eventServerEngine.completeEventAndIssueCertificates(id, user);
+    if (!result.success) {
+      return res.status(result.error?.includes('FORBIDDEN') ? 403 : 400).json({ error: result.error });
+    }
+    const winnersRes = await eventServerEngine.getEventWinners(id);
+    return res.json({ ...result, winners: winnersRes.winners });
+  } catch (err: unknown) {
+    console.error('[API POST /api/events/:id/finalize Error]:', err);
     return res.status(500).json({ error: (err as Error).message });
   }
 });

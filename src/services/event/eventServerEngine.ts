@@ -16,6 +16,7 @@
 
 import { integrityEngine } from '../integrity/integrityEngine';
 import { realtimeBroadcaster } from '../realtime/realtimeBroadcaster';
+import { aiContestService, type AIContestAnnouncementResult } from '../ai/aiContestService';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { EventType, ViolationType, ViolationSeverity } from '@/src/types/database';
 
@@ -208,6 +209,9 @@ const eventViolationsStore: EventViolationRecord[] = [];
 
 // Certificates Store: key = certificateId
 const certificatesStore = new Map<string, EventCertificateRecord>();
+
+// Event Winners Store: key = eventId -> AIContestAnnouncementResult
+const eventWinnersStore = new Map<string, AIContestAnnouncementResult>();
 
 // Seed default participants for CodeStorm Hackathon
 participantStore.set('evt-1:student-101', {
@@ -761,6 +765,30 @@ export const eventServerEngine = {
       participantStore.set(`${eventId}:${part.userId}`, part);
     }
 
+    // Trigger AI Top-3 Analysis for technical event
+    try {
+      const topParticipants = eventParticipants.slice(0, 5).map((p, idx) => ({
+        rank: idx + 1,
+        userId: p.userId,
+        displayName: p.displayName,
+        collegeId: p.collegeId,
+        totalScore: p.score,
+        penaltyTime: 0,
+        solvedCount: p.solvedCount,
+      }));
+
+      const aiAnnouncement = await aiContestService.generateAnnouncement({
+        contestId: eventId,
+        contestTitle: evt.title,
+        problemCount: evt.problems.length,
+        participants: topParticipants,
+      });
+
+      eventWinnersStore.set(eventId, aiAnnouncement);
+    } catch (err) {
+      console.warn('[EventEngine]: Failed to generate AI podium for event:', err);
+    }
+
     return {
       success: true,
       certificatesCount: issuedCount,
@@ -803,4 +831,41 @@ export const eventServerEngine = {
 
     return { event: evt, results };
   },
+
+  /**
+   * 12. Gets finalized AI Top 3 winners for event
+   */
+  async getEventWinners(eventId: string): Promise<{ winners: AIContestAnnouncementResult | null }> {
+    const existing = eventWinnersStore.get(eventId);
+    if (existing) return { winners: existing };
+
+    const evt = eventStore.get(eventId);
+    if (!evt) return { winners: null };
+
+    if (evt.status === 'completed' || evt.status === 'ended' || new Date(evt.endAt).getTime() <= Date.now()) {
+      const { results } = await this.getEventResults(eventId);
+      const topParticipants = results.slice(0, 5).map((p, idx) => ({
+        rank: idx + 1,
+        userId: p.userId,
+        displayName: p.displayName,
+        collegeId: p.collegeId,
+        totalScore: p.score,
+        penaltyTime: 0,
+        solvedCount: p.solvedCount,
+      }));
+
+      const aiAnnouncement = await aiContestService.generateAnnouncement({
+        contestId: eventId,
+        contestTitle: evt.title,
+        problemCount: evt.problems.length,
+        participants: topParticipants,
+      });
+
+      eventWinnersStore.set(eventId, aiAnnouncement);
+      return { winners: aiAnnouncement };
+    }
+
+    return { winners: null };
+  },
 };
+

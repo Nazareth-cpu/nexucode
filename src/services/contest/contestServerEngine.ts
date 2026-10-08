@@ -12,6 +12,7 @@ import { contestScoringService, type AuthoritativeParticipantScore } from '../sc
 import { rankingService, type ChapterLeaderboardRow } from '../ranking/rankingService';
 import { realtimeBroadcaster } from '../realtime/realtimeBroadcaster';
 import { integrityEngine } from '../integrity/integrityEngine';
+import { aiContestService, type AIContestAnnouncementResult } from '../ai/aiContestService';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface ContestEngineProblem {
@@ -99,6 +100,7 @@ const contestsStore = new Map<string, ContestEngineItem>();
 const participantsStore = new Map<string, Map<string, ParticipantRecord>>(); // contestId -> userId -> ParticipantRecord
 const violationsStore = new Map<string, ViolationRecord[]>(); // contestId -> ViolationRecord[]
 const scoresStore = new Map<string, Map<string, ContestUserScore>>(); // contestId -> userId -> ContestUserScore
+const contestWinnersStore = new Map<string, AIContestAnnouncementResult>(); // contestId -> AIContestAnnouncementResult
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -861,3 +863,82 @@ export function updateParticipantStatus(
   recalculateAndBroadcastContestStandings(contestId);
   return true;
 }
+
+/**
+ * Finalizes contest, freezes the leaderboard, and triggers authoritative AI Top 3 evaluation.
+ */
+export async function finalizeContestAndEvaluateTop3(
+  contestId: string,
+  user?: { id: string; role: string },
+  supabase?: SupabaseClient
+): Promise<{ success: boolean; winners?: AIContestAnnouncementResult; error?: string }> {
+  const contest = contestsStore.get(contestId);
+  if (!contest) {
+    return { success: false, error: 'Tournament not found.' };
+  }
+
+  // Authorize: coordinator or admin if manual trigger
+  if (user && user.role !== 'admin' && user.role !== 'coordinator') {
+    return { success: false, error: 'FORBIDDEN: Administrative privileges required to finalize contests.' };
+  }
+
+  // 1. Mark contest ended and freeze leaderboard
+  contest.status = 'ended';
+  contest.endAt = new Date().toISOString();
+
+  // 2. Compute final deterministic leaderboard
+  const finalStandings = getContestLeaderboard(contestId);
+
+  // 3. Trigger AI Top 3 Evaluation using OpenRouter -> Groq -> Deterministic failover
+  const topPerformers = finalStandings.slice(0, 5).map((row) => ({
+    rank: row.rank,
+    userId: row.userId,
+    displayName: row.displayName,
+    collegeId: row.collegeId,
+    totalScore: row.totalScore,
+    penaltyTime: row.penaltyTime,
+    solvedCount: row.solvedCount,
+  }));
+
+  const aiAnnouncement = await aiContestService.generateAnnouncement({
+    contestId,
+    contestTitle: contest.title,
+    problemCount: contest.problems.length,
+    participants: topPerformers,
+  });
+
+  // 4. Store finalized winners in persistent server store
+  contestWinnersStore.set(contestId, aiAnnouncement);
+
+  // 5. Broadcast finalization to connected clients
+  realtimeBroadcaster.broadcastContestLeaderboard(contestId, finalStandings);
+  realtimeBroadcaster.broadcastChapterLeaderboard(getChapterStandings());
+
+  return { success: true, winners: aiAnnouncement };
+}
+
+/**
+ * Retrieves finalized Top 3 winners with AI analysis, auto-finalizing if ended.
+ */
+export async function getContestWinners(
+  contestId: string,
+  supabase?: SupabaseClient
+): Promise<{ winners: AIContestAnnouncementResult | null }> {
+  // Check if already finalized and cached
+  const existing = contestWinnersStore.get(contestId);
+  if (existing) {
+    return { winners: existing };
+  }
+
+  const contest = contestsStore.get(contestId);
+  if (!contest) return { winners: null };
+
+  const computedStatus = getComputedContestStatus(contest);
+  if (computedStatus === 'ended' || contest.status === 'ended') {
+    const res = await finalizeContestAndEvaluateTop3(contestId, undefined, supabase);
+    return { winners: res.winners || null };
+  }
+
+  return { winners: null };
+}
+
